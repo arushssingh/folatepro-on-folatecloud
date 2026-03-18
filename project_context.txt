@@ -1,0 +1,113 @@
+Project Name: Folate App (AI Website & Mobile App Generator)
+
+High-Level Overview:
+This project is an AI-powered code generation tool that helps users create complete, production-ready front-end experiences from natural language prompts. It can generate:
+- Full multi-file responsive websites
+- Mobile app UIs
+The app uses Google’s Gemini models (via a secure backend proxy) to turn user descriptions into structured code bundles, and then lets users iterate on those bundles through a conversational interface.
+
+Technical Stack:
+- Frontend: React 18 with Vite as the bundler and dev server (TypeScript-based project).
+- Styling and UX: Tailwind CSS, custom CSS modules, framer-motion animations, and rich UI components (including custom hover, spotlight, and typewriter effects).
+- Backend: Node.js + Express server (`server.js`) that exposes `/api/generate` and `/api/generate/stream` endpoints.
+- AI Model Integration: `@google/genai` SDK using the `gemini-3.1-pro-preview` model for text + code generation, including streaming responses for smooth live updates.
+- Authentication & Persistence: Supabase (`@supabase/supabase-js`) for user auth and storing profile / project metadata.
+- Tooling: Vite, TypeScript, Tailwind, PostCSS, and `concurrently` to run the dev server and backend together.
+
+How the System is Structured:
+- Root-level frontend app:
+  - `index.html` and `index.tsx` boot the React application.
+  - `App.tsx` contains the main UI shell and orchestrates the major views: Generator, Community Chat, and Playground.
+  - `components/` holds modular UI pieces such as:
+    - `Header`, `Footer`, and navigation components.
+    - `PromptInput` for entering generation prompts.
+    - `PreviewWindow` and `MobilePreview` to show the generated website or mobile UI.
+    - `ChatInterface` for follow-up editing instructions and conversational flows.
+    - `AuthModal`, `UserDropdown`, and account settings components for login / profile management.
+- Context and hooks:
+  - `contexts/AuthContext.tsx` manages user authentication state and exposes `useAuth` to the rest of the app.
+  - `hooks/useProfile.ts` encapsulates profile-related fetching and updating, typically backed by Supabase.
+- Constants and templates:
+  - `constants/templates-website.ts`, `constants/templates-mobile.ts`, and `constants/templates.ts` define curated starting templates for common site/app types (e.g., landing pages, dashboards, portfolios).
+  - `constants/templates-types.ts` and `types.ts` define shared TypeScript types for templates, files, messages, app views, and project types.
+- Services:
+  - `services/geminiService.ts` wraps calls to the backend API endpoints to:
+    - Generate initial code files (`generateWebsiteCode`, `generateMobileAppCode`).
+    - Apply edits to existing code based on follow-up natural language instructions (`editWebsiteCode`, `editMobileAppCode`).
+  - `services/snackService.ts` provides helper functions for user notifications / snackbars in the UI.
+- Utility code:
+  - `lib/utils.ts` contains shared helpers and utility functions.
+  - `lib/constants.ts` and `lib/supabase.ts` centralize config values and Supabase client setup.
+
+How the User Flow Works:
+1. Landing and Prompt:
+   - The user lands on the Generator view and either:
+     - Enters a natural language prompt describing the website or mobile app they want, or
+     - Selects a pre-made template from the template gallery.
+2. Authentication:
+   - Before triggering generation, the app checks `useAuth`:
+     - If the user is not signed in, an `AuthModal` prompts them to log in or sign up (via Supabase).
+     - Once authenticated, generation continues.
+3. Initial Generation:
+   - `App.tsx` calls the appropriate generator from `geminiService` based on the current `projectType`:
+     - Website: `generateWebsiteCode`
+     - Mobile App: `generateMobileAppCode`
+   - These functions:
+     - Send the user prompt (and any configuration) to the backend at `/api/generate` or `/api/generate/stream`.
+     - Receive a structured set of files (a `FileSet`) plus explanations and testing instructions from Gemini.
+   - The UI updates:
+     - `messages` state is updated with a user message and then an AI response summarizing what was generated and how to test it.
+     - `currentFiles` holds the generated files.
+     - The Preview area (`PreviewWindow` / `MobilePreview`) shows a live, interactive rendering of the generated code.
+4. Iterative Editing:
+   - The Chat side (`ChatInterface`) allows the user to send follow-up instructions like “make the hero section darker” or “add a pricing table.”
+   - `handleFollowUp` in `App.tsx`:
+     - Sends the current `FileSet` plus the new instruction to `editWebsiteCode` or `editMobileAppCode`.
+     - Receives an updated `FileSet`, explanation, and new testing notes.
+     - Updates the preview and app state accordingly, preserving a conversational history.
+5. Additional Views:
+   - Community View:
+     - `CommunityChat` offers a shared or community-driven chat experience around prompts, tips, or examples.
+   - Playground View:
+     - `KidPlayground` is a more playful interface that can be used for experimentation or simplified interactions while still driving the same generation logic.
+
+Backend Context (server.js):
+- The backend is deliberately thin and focused on:
+  - Validating incoming requests to `/api/generate` and `/api/generate/stream`.
+  - Passing `contents` and `config` directly to the Gemini model via `GoogleGenAI`.
+  - Handling streaming responses, converting Gemini’s stream into a browser-friendly Server-Sent Events (SSE) stream for smooth, incremental updates in the UI.
+- Security and configuration:
+  - Requires an `API_KEY` environment variable at startup; if missing, the server exits immediately.
+  - Uses CORS with an `ALLOWED_ORIGIN` derived from `CORS_ORIGIN` or defaults to `http://localhost:5173` for local Vite dev.
+  - Listens on `PORT` from the environment or 3000 by default, making it suitable for platforms like Render.
+
+Development and Local Setup:
+- Install dependencies:
+  - Run `npm install` at the root.
+- Environment:
+  - Copy `.env.example` to `.env` and fill in:
+    - `API_KEY` for the Gemini API (used by the backend).
+    - Supabase credentials (URL and anon key) for auth and data.
+    - Any other required keys matching the example file.
+- Running locally:
+  - Use `npm start` to run both:
+    - The Express backend via `npm run server` (on port 3000 by default).
+    - The Vite dev server via `npm run dev` (typically on `http://localhost:5173`).
+  - The frontend calls `/api/...`, which in development is proxied to the backend according to `vite.config.ts`.
+
+Deployment Context:
+- Typical deployment pattern:
+  - Backend:
+    - Deployed as a Node web service (for example on Render), running `node server.js`, with `API_KEY` and `CORS_ORIGIN` configured.
+  - Frontend:
+    - Built with `npm run build` (output in `dist`) and deployed to a static hosting platform (for example Netlify).
+    - A redirect/proxy rule is used so that `/api/*` calls from the frontend are transparently forwarded to the backend URL.
+- This separation keeps the frontend static and scalable while delegating all protected API traffic to the secure backend proxy.
+
+Intended Use Cases:
+- Quickly prototype or generate marketing websites, portfolios, dashboards, or basic mobile app UIs from plain English.
+- Iterate on designs and layouts conversationally instead of manually editing code.
+- Provide a guided experience for less-technical users (via Playground) and more advanced customization options for developers (via direct prompts and template editing).
+
+In short:
+This project is a modern AI-assisted code generation platform that lets users describe what they want, generates real React-based frontends (and mobile UIs), and then refines them through a rich, conversational interface, backed by a secure Gemini proxy server and Supabase-backed authentication.
