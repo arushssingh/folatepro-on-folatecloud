@@ -7,10 +7,18 @@ export interface FileSet {
   [filename: string]: FileContent;
 }
 
+export interface DesignMeta {
+  designStyle: string[];
+  colorPalette: { hex: string; label: string }[];
+  siteStructure: string[];
+  summary: string;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
   files?: FileSet;
+  designMeta?: DesignMeta;
 }
 
 export enum DeviceView {

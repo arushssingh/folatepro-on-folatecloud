@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { ArrowUp, User, Sparkles, Layout, Palette, Smartphone, Share2, Info, Lightbulb, X, ChevronRight, MessageSquare, ShieldCheck, Zap, Globe, MousePointer2, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Message, ProjectType } from '../types';
+import { DesignBreakdown } from './DesignBreakdown';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -185,7 +186,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = React.memo(({ message
                     ? 'bg-blue-600 text-white border border-transparent shadow-md'
                     : isDarkMode ? 'bg-white/[0.06] backdrop-blur-sm border border-white/5 text-gray-300' : 'bg-white border border-gray-100 text-gray-600 shadow-sm'
                 }`}>
-                  {isUser ? <div className="whitespace-pre-wrap">{msg.content}</div> : idx === messages.length - 1 ? <TypewriterMessage content={msg.content} /> : <div className="whitespace-pre-wrap">{msg.content}</div>}
+                  {isUser ? (
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  ) : (
+                    <>
+                      {msg.designMeta && <DesignBreakdown designMeta={msg.designMeta} isDarkMode={isDarkMode} />}
+                      {idx === messages.length - 1 ? <TypewriterMessage content={msg.content} /> : <div className="whitespace-pre-wrap">{msg.content}</div>}
+                    </>
+                  )}
                 </div>
               </div>
             </div>

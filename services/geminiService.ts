@@ -1,5 +1,5 @@
 import { Type } from "@google/genai";
-import { FileSet } from "../types";
+import { FileSet, DesignMeta } from "../types";
 
 const WEBSITE_SYSTEM_PROMPT = `
 You are an expert Senior Full Stack Web Developer and UI/UX Designer.
@@ -55,6 +55,14 @@ Generate **production-ready, multi-page websites** that are beautiful and unique
 <code_quality>
   CRITICAL: Provide the FULL, complete content of every file. NEVER truncate, summarize, or use placeholders like "<!-- rest of page -->". Every file must be complete and ready to run.
 </code_quality>
+
+<design_metadata>
+  Along with the generated files, return structured design metadata:
+  - summary: A 2-3 sentence paragraph describing what you're building for the user, in a conversational tone (e.g., "A modern, approachable design system that reflects speed, innovation, and accessibility...")
+  - designStyle: 3-5 short phrases describing the design approach (e.g., ["Warm Minimalist", "Quick Launch Focused", "Smooth Interactions", "Accessible & Clear"])
+  - colorPalette: 4-5 key colors used in the design, each with a hex code and a label (e.g., [{"hex": "#afa094", "label": "Background Accent"}, {"hex": "#2563eb", "label": "Primary Blue"}])
+  - siteStructure: List of the main page sections in order (e.g., ["Navbar", "Hero Section", "About Section", "Features Timeline", "Pricing Section", "Testimonials", "Contact CTA", "Footer"])
+</design_metadata>
 `;
 
 const AGENT_SYSTEM_PROMPT = `
@@ -220,6 +228,7 @@ export interface GeminiResponse {
   files: FileSet;
   explanation: string;
   testingInstructions: string;
+  designMeta?: DesignMeta;
 }
 
 const GENERATE_CONFIG = {
@@ -239,9 +248,29 @@ const GENERATE_CONFIG = {
         },
       },
       explanation: { type: Type.STRING },
-      testingInstructions: { type: Type.STRING }
+      testingInstructions: { type: Type.STRING },
+      summary: { type: Type.STRING },
+      designStyle: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+      },
+      colorPalette: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            hex: { type: Type.STRING },
+            label: { type: Type.STRING },
+          },
+          required: ["hex", "label"],
+        },
+      },
+      siteStructure: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+      },
     },
-    required: ["files", "explanation", "testingInstructions"],
+    required: ["files", "explanation", "testingInstructions", "summary", "designStyle", "colorPalette", "siteStructure"],
   },
 };
 
@@ -337,11 +366,22 @@ function parseGeminiResult(jsonStr: string): GeminiResponse {
       language: detectLanguage(f.name),
     };
   });
-  return {
+  const response: GeminiResponse = {
     files: fileSet,
     explanation: result.explanation,
     testingInstructions: result.testingInstructions,
   };
+
+  if (result.summary && result.designStyle && result.colorPalette && result.siteStructure) {
+    response.designMeta = {
+      summary: result.summary,
+      designStyle: result.designStyle,
+      colorPalette: result.colorPalette,
+      siteStructure: result.siteStructure,
+    };
+  }
+
+  return response;
 }
 
 // Website generation

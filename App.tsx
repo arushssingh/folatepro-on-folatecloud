@@ -132,13 +132,14 @@ const App: React.FC = () => {
 
     try {
       const generate = getGenerator(activeType);
-      const { files, explanation, testingInstructions } = await generate(prompt, (chars) => setStreamingChars(chars));
-      setCurrentFiles(files);
+      const result = await generate(prompt, (chars) => setStreamingChars(chars));
+      setCurrentFiles(result.files);
 
       const aiMsg: Message = {
         role: 'assistant',
-        content: `${explanation}\n\n**How to test:**\n${testingInstructions}`,
-        files
+        content: `${result.explanation}\n\n**How to test:**\n${result.testingInstructions}`,
+        files: result.files,
+        designMeta: result.designMeta,
       };
       setMessages(prev => [...prev, aiMsg]);
 
