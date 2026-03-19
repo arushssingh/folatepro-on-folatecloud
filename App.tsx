@@ -7,6 +7,8 @@ import { ChatInterface } from './components/ChatInterface';
 import { CommunityChat } from './components/CommunityChat';
 import { KidPlayground } from './components/KidPlayground';
 import { AuthModal } from './components/AuthModal';
+import { DeployModal } from './components/DeployModal';
+import { MyProjects } from './components/MyProjects';
 import { PreviewPlaceholder } from './components/PreviewPlaceholder';
 import { Footer } from './components/Footer';
 import {
@@ -14,7 +16,7 @@ import {
   generateMobileAppCode, editMobileAppCode,
 } from './services/geminiService';
 import { useAuth } from './contexts/AuthContext';
-import { Message, FileSet, AppView, ProjectType } from './types';
+import { Message, FileSet, AppView, ProjectType, Project } from './types';
 import type { Template } from './constants/templates-types';
 
 const App: React.FC = () => {
@@ -25,6 +27,9 @@ const App: React.FC = () => {
   const [currentFiles, setCurrentFiles] = useState<FileSet | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>();
+  const [currentProjectSlug, setCurrentProjectSlug] = useState<string | undefined>();
   const [projectType, setProjectType] = useState<ProjectType>(ProjectType.WEBSITE);
   const { user } = useAuth();
 
@@ -48,6 +53,8 @@ const App: React.FC = () => {
         setCurrentFiles(null);
         setSidebarWidth(400);
         setCurrentView(AppView.GENERATOR);
+        setCurrentProjectId(undefined);
+        setCurrentProjectSlug(undefined);
       }
     };
 
@@ -201,6 +208,34 @@ const App: React.FC = () => {
     setCurrentFiles(null);
     setSidebarWidth(400);
     setCurrentView(AppView.GENERATOR);
+    setCurrentProjectId(undefined);
+    setCurrentProjectSlug(undefined);
+  }, []);
+
+  const handleDeploy = useCallback(() => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    setShowDeployModal(true);
+  }, [user]);
+
+  const handleDeployed = useCallback((project: { id: string; slug: string }) => {
+    setCurrentProjectId(project.id);
+    setCurrentProjectSlug(project.slug);
+  }, []);
+
+  const handleEditProject = useCallback((project: Project) => {
+    setCurrentFiles(project.files);
+    setCurrentProjectId(project.id);
+    setCurrentProjectSlug(project.slug);
+    setProjectType(ProjectType.WEBSITE);
+    setCurrentView(AppView.GENERATOR);
+    setMessages([{
+      role: 'assistant',
+      content: `Loaded project **${project.name}** for editing. Make changes via chat, then click **Update** to redeploy.`,
+      files: project.files,
+    }]);
   }, []);
 
   return (
@@ -217,7 +252,11 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex overflow-hidden relative z-10">
         <AnimatePresence mode="wait">
-          {currentView === AppView.PLAYGROUND ? (
+          {currentView === AppView.MY_PROJECTS ? (
+            <motion.div key="my-projects" className="w-full h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+              <MyProjects isDarkMode={isDarkMode} onEditProject={handleEditProject} />
+            </motion.div>
+          ) : currentView === AppView.PLAYGROUND ? (
             <motion.div key="playground" className="w-full h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
               <KidPlayground onGenerate={handleInitialGenerate} isGenerating={isGenerating} isDarkMode={isDarkMode} />
             </motion.div>
@@ -279,7 +318,7 @@ const App: React.FC = () => {
 
               <div className="flex-1 h-full min-w-[375px]">
                 {currentFiles ? (
-                  <PreviewWindow files={currentFiles} isDarkMode={isDarkMode} projectType={projectType} onFilesChange={setCurrentFiles} />
+                  <PreviewWindow files={currentFiles} isDarkMode={isDarkMode} projectType={projectType} onFilesChange={setCurrentFiles} onDeploy={handleDeploy} currentProjectSlug={currentProjectSlug} />
                 ) : (
                   <PreviewPlaceholder isGenerating={isGenerating} isDarkMode={isDarkMode} projectType={projectType} streamingChars={streamingChars} />
                 )}
@@ -294,6 +333,18 @@ const App: React.FC = () => {
         onClose={() => setShowAuthModal(false)}
         isDarkMode={isDarkMode}
       />
+
+      {currentFiles && (
+        <DeployModal
+          isOpen={showDeployModal}
+          onClose={() => setShowDeployModal(false)}
+          isDarkMode={isDarkMode}
+          files={currentFiles}
+          projectId={currentProjectId}
+          existingSlug={currentProjectSlug}
+          onDeployed={handleDeployed}
+        />
+      )}
     </div>
   );
 };

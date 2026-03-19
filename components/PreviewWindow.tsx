@@ -19,6 +19,7 @@ import {
   Sun,
   RotateCw,
   Download,
+  Rocket,
   AlertTriangle,
   Globe,
   MousePointer2,
@@ -45,6 +46,8 @@ interface PreviewWindowProps {
   isDarkMode: boolean;
   projectType?: ProjectType;
   onFilesChange?: (files: FileSet) => void;
+  onDeploy?: () => void;
+  currentProjectSlug?: string;
 }
 
 interface SelectedElement {
@@ -191,7 +194,7 @@ const FileTreeItem: React.FC<{
   );
 });
 
-export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode, projectType, onFilesChange }) => {
+export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode, projectType, onFilesChange, onDeploy, currentProjectSlug }) => {
   const isWebsite = !projectType || projectType === ProjectType.WEBSITE;
   const [device, setDevice] = useState<DeviceView>(
     projectType === ProjectType.MOBILE_APP ? DeviceView.MOBILE : DeviceView.DESKTOP
@@ -516,6 +519,21 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
           >
             <Download className="w-4 h-4" />
           </button>
+
+          {isWebsite && onDeploy && (
+            <button
+              onClick={onDeploy}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                currentProjectSlug
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              title={currentProjectSlug ? 'Update deployed site' : 'Deploy site'}
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              {currentProjectSlug ? 'Update' : 'Deploy'}
+            </button>
+          )}
 
           {viewMode === ViewMode.PREVIEW && isWebsite && (
             <>

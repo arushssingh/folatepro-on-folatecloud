@@ -16,10 +16,11 @@ interface HeaderProps {
 }
 
 const NAV_ITEMS = [
-  { label: 'Website',    id: AppView.GENERATOR },
-  { label: 'Mobile App', id: AppView.MOBILE_APP },
-  { label: 'Playground', id: AppView.PLAYGROUND },
-  { label: 'Community',  id: AppView.COMMUNITY },
+  { label: 'Website',    id: AppView.GENERATOR, authOnly: false },
+  { label: 'Mobile App', id: AppView.MOBILE_APP, authOnly: false },
+  { label: 'Playground', id: AppView.PLAYGROUND, authOnly: false },
+  { label: 'Community',  id: AppView.COMMUNITY, authOnly: false },
+  { label: 'My Projects', id: AppView.MY_PROJECTS, authOnly: true },
 ];
 
 export const Header: React.FC<HeaderProps> = React.memo(({ onReset, isDarkMode, onToggleDarkMode, currentView, onViewChange, user, onLoginClick }) => {
@@ -45,7 +46,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({ onReset, isDarkMode, 
 
       {/* Center Nav */}
       <nav className="flex items-center gap-1 flex-1">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(item => !item.authOnly || user).map((item) => {
           const isActive = currentView === item.id;
           return (
             <button
