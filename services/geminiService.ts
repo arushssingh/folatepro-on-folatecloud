@@ -307,6 +307,7 @@ const callGemini = async (prompt: string, onProgress?: (chars: number) => void):
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  let receivedDone = false;
 
   try {
     while (true) {
@@ -321,6 +322,7 @@ const callGemini = async (prompt: string, onProgress?: (chars: number) => void):
         if (!line.startsWith('data: ')) continue;
         const data = line.slice(6).trim();
         if (data === '[DONE]') {
+          receivedDone = true;
           clearTimeout(timeoutId);
           return fullText;
         }
@@ -340,6 +342,10 @@ const callGemini = async (prompt: string, onProgress?: (chars: number) => void):
     clearTimeout(timeoutId);
   }
 
+  if (!receivedDone) {
+    console.warn('Stream ended without [DONE] signal — response may be truncated.');
+  }
+
   if (!fullText) throw new Error("Empty response from AI model.");
   return fullText;
 };
@@ -357,8 +363,85 @@ function detectLanguage(filename: string): string {
   return 'plaintext';
 }
 
+function repairTruncatedJson(jsonStr: string): string {
+  let inString = false;
+  let escaped = false;
+  const bracketStack: string[] = [];
+
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (ch === '{' || ch === '[') {
+        bracketStack.push(ch);
+      } else if (ch === '}' || ch === ']') {
+        bracketStack.pop();
+      }
+    }
+  }
+
+  let repaired = jsonStr;
+
+  // Close unterminated string
+  if (inString) {
+    repaired += '"';
+  }
+
+  // Close unclosed brackets in reverse order
+  while (bracketStack.length > 0) {
+    const open = bracketStack.pop();
+    repaired += open === '{' ? '}' : ']';
+  }
+
+  return repaired;
+}
+
 function parseGeminiResult(jsonStr: string): GeminiResponse {
-  const result = JSON.parse(jsonStr);
+  let result;
+  try {
+    result = JSON.parse(jsonStr);
+  } catch (firstError) {
+    console.warn('JSON parse failed, attempting repair:', firstError);
+    const repaired = repairTruncatedJson(jsonStr);
+    try {
+      result = JSON.parse(repaired);
+    } catch {
+      throw new Error(
+        'Failed to parse AI response. The response may have been truncated. Please try again.'
+      );
+    }
+  }
+
+  if (!result.files || !Array.isArray(result.files)) {
+    throw new Error('AI response is missing file data. Please try again.');
+  }
+
+  // Drop last file if it appears truncated (content cut off mid-tag/statement)
+  if (result.files.length > 0) {
+    const lastFile = result.files[result.files.length - 1];
+    if (lastFile.content && lastFile.content.length > 0) {
+      const trimmed = lastFile.content.trimEnd();
+      const endsClean = /[>};)\n\r]$/.test(trimmed);
+      if (!endsClean && result.files.length > 1) {
+        result.files.pop();
+      }
+    }
+  }
   const fileSet: FileSet = {};
   result.files.forEach((f: any) => {
     fileSet[f.name] = {

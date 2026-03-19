@@ -190,7 +190,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = React.memo(({ message
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                   ) : (
                     <>
-                      {msg.designMeta && <DesignBreakdown designMeta={msg.designMeta} isDarkMode={isDarkMode} />}
+                      {msg.designMeta && <DesignBreakdown designMeta={msg.designMeta} isDarkMode={isDarkMode} animate={idx === messages.length - 1} />}
                       {idx === messages.length - 1 ? <TypewriterMessage content={msg.content} /> : <div className="whitespace-pre-wrap">{msg.content}</div>}
                     </>
                   )}
