@@ -40,6 +40,21 @@ const App: React.FC = () => {
     }
   }, [isDarkMode]);
 
+  // Handle browser back button: reset to home instead of leaving the SPA
+  useEffect(() => {
+    const handlePopState = () => {
+      if (messages.length > 0 || currentView !== AppView.GENERATOR) {
+        setMessages([]);
+        setCurrentFiles(null);
+        setSidebarWidth(400);
+        setCurrentView(AppView.GENERATOR);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [messages.length, currentView]);
+
   const toggleDarkMode = useCallback(() => setIsDarkMode(prev => !prev), []);
 
   const handleViewChange = useCallback((view: AppView) => {
@@ -99,6 +114,7 @@ const App: React.FC = () => {
     const activeType = type ?? projectType;
     if (type) setProjectType(activeType);
 
+    window.history.pushState({ view: 'generating' }, '', '/');
     setIsGenerating(true);
     if (currentView === AppView.COMMUNITY || currentView === AppView.PLAYGROUND) {
       setCurrentView(AppView.GENERATOR);
