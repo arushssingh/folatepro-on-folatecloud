@@ -137,7 +137,7 @@ const App: React.FC = () => {
 
       const aiMsg: Message = {
         role: 'assistant',
-        content: `${result.explanation}\n\n**How to test:**\n${result.testingInstructions}`,
+        content: result.explanation,
         files: result.files,
         designMeta: result.designMeta,
       };
@@ -188,7 +188,7 @@ const App: React.FC = () => {
 
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `${explanation}\n\n**Testing:**\n${testingInstructions}`,
+        content: explanation,
         files
       }]);
 
