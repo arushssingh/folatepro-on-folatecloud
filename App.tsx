@@ -16,7 +16,7 @@ import {
   generateMobileAppCode, editMobileAppCode,
 } from './services/geminiService';
 import { useAuth } from './contexts/AuthContext';
-import { Message, FileSet, AppView, ProjectType, Project } from './types';
+import { Message, FileSet, AppView, ProjectType, Project, DesignMeta } from './types';
 import type { Template } from './constants/templates-types';
 
 const App: React.FC = () => {
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [currentProjectId, setCurrentProjectId] = useState<string | undefined>();
   const [currentProjectSlug, setCurrentProjectSlug] = useState<string | undefined>();
   const [projectType, setProjectType] = useState<ProjectType>(ProjectType.WEBSITE);
+  const [pendingResult, setPendingResult] = useState<{ explanation: string; files: FileSet; designMeta?: DesignMeta } | null>(null);
   const { user } = useAuth();
 
   const [sidebarWidth, setSidebarWidth] = useState(400);
@@ -135,13 +136,16 @@ const App: React.FC = () => {
       const result = await generate(prompt, (chars) => setStreamingChars(chars));
       setCurrentFiles(result.files);
 
-      const aiMsg: Message = {
-        role: 'assistant',
-        content: result.explanation,
-        files: result.files,
-        designMeta: result.designMeta,
-      };
-      setMessages(prev => [...prev, aiMsg]);
+      if (result.designMeta) {
+        // Hold result — keep isGenerating true so design sections stream in during "thinking" phase
+        setPendingResult({ explanation: result.explanation, files: result.files, designMeta: result.designMeta });
+      } else {
+        // No design metadata — finalize message immediately
+        const aiMsg: Message = { role: 'assistant', content: result.explanation, files: result.files };
+        setMessages(prev => [...prev, aiMsg]);
+        setIsGenerating(false);
+        setStreamingChars(0);
+      }
 
     } catch (err: any) {
       console.error("Generation Error:", err);
@@ -153,11 +157,25 @@ const App: React.FC = () => {
 
       const errorMsg: Message = { role: 'assistant', content: errorMessage };
       setMessages(prev => [...prev, errorMsg]);
-    } finally {
       setIsGenerating(false);
       setStreamingChars(0);
     }
   }, [user, projectType, currentView, getGenerator]);
+
+  // Called when design breakdown animation finishes — finalizes the AI message
+  const handleDesignRevealComplete = useCallback(() => {
+    if (!pendingResult) return;
+    const aiMsg: Message = {
+      role: 'assistant',
+      content: pendingResult.explanation,
+      files: pendingResult.files,
+      designMeta: pendingResult.designMeta,
+    };
+    setMessages(prev => [...prev, aiMsg]);
+    setPendingResult(null);
+    setIsGenerating(false);
+    setStreamingChars(0);
+  }, [pendingResult]);
 
   const handleSelectTemplate = useCallback((template: Template) => {
     setCurrentFiles(template.files);
@@ -303,6 +321,8 @@ const App: React.FC = () => {
                   isDarkMode={isDarkMode}
                   projectType={projectType}
                   streamingChars={streamingChars}
+                  pendingDesignMeta={pendingResult?.designMeta}
+                  onDesignRevealComplete={handleDesignRevealComplete}
                 />
 
                 <div

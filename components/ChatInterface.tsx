@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { ArrowUp, User, Sparkles, Layout, Palette, Smartphone, Share2, Info, Lightbulb, X, ChevronRight, MessageSquare, ShieldCheck, Zap, Globe, MousePointer2, ShoppingBag } from 'lucide-react';
+import { ArrowUp, User, Sparkles, Layout, Smartphone, Info, Lightbulb, X, MessageSquare, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Message, ProjectType } from '../types';
+import { Message, ProjectType, DesignMeta } from '../types';
 import { DesignBreakdown } from './DesignBreakdown';
 
 interface ChatInterfaceProps {
@@ -11,6 +11,8 @@ interface ChatInterfaceProps {
   isDarkMode: boolean;
   projectType?: ProjectType;
   streamingChars?: number;
+  pendingDesignMeta?: DesignMeta;
+  onDesignRevealComplete?: () => void;
 }
 
 const useTypewriter = (phrases: string[]) => {
@@ -84,7 +86,7 @@ const FolateLogo = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = React.memo(({ messages, onSendMessage, isGenerating, isDarkMode, projectType, streamingChars = 0 }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = React.memo(({ messages, onSendMessage, isGenerating, isDarkMode, projectType, streamingChars = 0, pendingDesignMeta, onDesignRevealComplete }) => {
   const [input, setInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -190,8 +192,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = React.memo(({ message
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                   ) : (
                     <>
-                      {msg.designMeta && <DesignBreakdown designMeta={msg.designMeta} isDarkMode={isDarkMode} animate={idx === messages.length - 1} />}
-                      {idx === messages.length - 1 ? <TypewriterMessage content={msg.content} /> : <div className="whitespace-pre-wrap">{msg.content}</div>}
+                      {msg.designMeta && <DesignBreakdown designMeta={msg.designMeta} isDarkMode={isDarkMode} animate={false} />}
+                      {idx === messages.length - 1 && !msg.designMeta ? <TypewriterMessage content={msg.content} /> : <div className="whitespace-pre-wrap">{msg.content}</div>}
                     </>
                   )}
                 </div>
@@ -205,20 +207,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = React.memo(({ message
             ? lastUserMessage.slice(0, 110).trimEnd() + '\u2026'
             : lastUserMessage;
 
-          let currentFile: string;
-          let currentActivity: string;
-          if (projectType === ProjectType.MOBILE_APP) {
-            if (streamingChars < 10_000)      { currentFile = 'index.html'; currentActivity = 'Designing screen layouts'; }
-            else if (streamingChars < 30_000) { currentFile = 'index.html'; currentActivity = 'Styling mobile components'; }
-            else if (streamingChars < 55_000) { currentFile = 'index.html'; currentActivity = 'Adding screen navigation'; }
-            else                              { currentFile = 'index.html'; currentActivity = 'Assembling final build'; }
-          } else {
-            if (streamingChars < 10_000)      { currentFile = 'index.html';  currentActivity = 'Writing page structure & content'; }
-            else if (streamingChars < 30_000) { currentFile = 'styles.css';  currentActivity = 'Applying Tailwind styles'; }
-            else if (streamingChars < 55_000) { currentFile = 'scripts.js';  currentActivity = 'Adding interactivity'; }
-            else                              { currentFile = 'index.html';  currentActivity = 'Assembling final build'; }
-          }
-
           return (
             <div className="flex gap-3 w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border ${isDarkMode ? 'bg-blue-900/30 border-blue-800' : 'bg-blue-50 border-blue-100'}`}>
@@ -226,40 +214,34 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = React.memo(({ message
               </div>
               <div className="flex flex-col gap-2 max-w-[82%] pt-0.5">
                 <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {streamingChars === 0 ? 'Thinking\u2026' : `Thought for ${elapsedSeconds}s`}
+                  {streamingChars === 0 && !pendingDesignMeta ? 'Thinking\u2026' : `Thought for ${elapsedSeconds}s`}
                 </span>
                 <AnimatePresence>
-                  {streamingChars > 0 && (
+                  {streamingChars > 0 && !pendingDesignMeta && (
                     <motion.div
-                      key="building-card"
+                      key="building-desc"
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3 }}
-                      className="flex flex-col gap-2"
                     >
                       <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                         {description}
                       </p>
-                      <span className={`text-xs ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>
-                        Let me build it:
-                      </span>
-                      <div className={`rounded-xl border px-3.5 py-2.5 ${isDarkMode ? 'bg-white/[0.04] border-white/[0.08]' : 'bg-gray-50 border-gray-200'}`}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={`text-xs shrink-0 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Editing</span>
-                            <span className={`text-xs font-mono px-1.5 py-0.5 rounded-md shrink-0 ${isDarkMode ? 'bg-white/[0.08] text-gray-300' : 'bg-white border border-gray-200 text-gray-600'}`}>
-                              {currentFile}
-                            </span>
-                          </div>
-                          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
-                        </div>
-                        <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                          {currentActivity}
-                        </p>
-                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {pendingDesignMeta && (
+                  <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm transition-colors ${
+                    isDarkMode ? 'bg-white/[0.06] backdrop-blur-sm border border-white/5 text-gray-300' : 'bg-white border border-gray-100 text-gray-600 shadow-sm'
+                  }`}>
+                    <DesignBreakdown
+                      designMeta={pendingDesignMeta}
+                      isDarkMode={isDarkMode}
+                      animate={true}
+                      onComplete={onDesignRevealComplete}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           );

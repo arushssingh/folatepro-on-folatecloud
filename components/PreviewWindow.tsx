@@ -336,12 +336,21 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
     if (viewMode === ViewMode.PREVIEW && iframeRef.current && fileToShow) {
       let html = fileToShow.content;
       
-      // Inject CSS
+      // Inject CSS — replace <link> tags with inline <style>, and inject any
+      // unmatched CSS files as fallback before </head>
       const cssFiles = Object.keys(files).filter(f => f.endsWith('.css'));
+      let fallbackStyles = '';
       cssFiles.forEach(cssFile => {
-        const regex = new RegExp(`<link[^>]*href=["']\\.?\/?${escapeRegExp(cssFile)}["'][^>]*>`, 'gi');
+        const regex = new RegExp(`<link[^>]*href=["']\\.?\/?${escapeRegExp(cssFile)}["'][^>]*\\/?>`, 'gi');
+        const before = html;
         html = html.replace(regex, `<style>\n/* ${cssFile} */\n${files[cssFile].content}\n</style>`);
+        if (html === before) {
+          fallbackStyles += `<style>\n/* ${cssFile} */\n${files[cssFile].content}\n</style>\n`;
+        }
       });
+      if (fallbackStyles) {
+        html = html.replace('</head>', fallbackStyles + '</head>');
+      }
 
       // Inject JS — remove original <script src> tags and collect inlined scripts
       // to inject before </body>, ensuring DOM is fully parsed before JS executes
@@ -350,10 +359,16 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
       jsFiles.forEach(jsFile => {
         const regex = new RegExp(`<script([^>]*)src=["']\\.?\/?${escapeRegExp(jsFile)}["']([^>]*)>[\\s\\S]*?<\\/script>`, 'gi');
         html = html.replace(regex, '');
-        inlinedScripts += `<script>\n// ${jsFile}\n${files[jsFile].content}\n</script>\n`;
+        inlinedScripts += `<script>\ntry {\n// ${jsFile}\n${files[jsFile].content}\n} catch(e) { console.warn('Script error in ${jsFile}:', e.message); }\n</script>\n`;
       });
+      // Initialize Lucide icons after DOM loads (if CDN was included by AI)
+      inlinedScripts += `<script>document.addEventListener('DOMContentLoaded',function(){if(typeof lucide!=='undefined')lucide.createIcons();});<\/script>\n`;
       if (inlinedScripts) {
-        html = html.replace('</body>', inlinedScripts + '</body>');
+        if (html.includes('</body>')) {
+          html = html.replace('</body>', inlinedScripts + '</body>');
+        } else {
+          html += inlinedScripts;
+        }
       }
 
       // Inject Dark Mode

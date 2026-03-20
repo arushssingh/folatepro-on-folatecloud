@@ -7,6 +7,7 @@ interface DesignBreakdownProps {
   designMeta: DesignMeta;
   isDarkMode: boolean;
   animate?: boolean;
+  onComplete?: () => void;
 }
 
 function contrastColor(hex: string): string {
@@ -62,17 +63,16 @@ const SummaryTypewriter: React.FC<{ text: string; onComplete: () => void }> = ({
   return <>{displayed}</>;
 };
 
-export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, isDarkMode, animate = true }) => {
+export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, isDarkMode, animate = true, onComplete }) => {
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [revealPhase, setRevealPhase] = useState(animate ? 0 : 4);
-  const [isShuffling, setIsShuffling] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shuffleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const completedRef = useRef(false);
   const palette = designMeta.colorPalette;
   const currentColor = palette[paletteIndex];
 
-  const prevColor = () => { if (!isShuffling) setPaletteIndex(i => (i - 1 + palette.length) % palette.length); };
-  const nextColor = () => { if (!isShuffling) setPaletteIndex(i => (i + 1) % palette.length); };
+  const prevColor = () => setPaletteIndex(i => (i - 1 + palette.length) % palette.length);
+  const nextColor = () => setPaletteIndex(i => (i + 1) % palette.length);
 
   // Phase advancement: summary typewriter completion triggers phase 2
   const handleSummaryComplete = useCallback(() => {
@@ -88,38 +88,17 @@ export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, is
     };
   }, [animate]);
 
-  // When palette phase (2) appears, start shuffling animation
+  // Phase 2 → 3: palette visible for 2s then advance to design style
   useEffect(() => {
-    if (revealPhase !== 2 || !animate || palette.length <= 1) {
-      if (revealPhase === 2 && animate) {
-        // No shuffle needed, advance to next phase
-        timeoutRef.current = setTimeout(() => setRevealPhase(3), 1500);
-      }
-      return;
+    if (revealPhase === 2 && animate) {
+      timeoutRef.current = setTimeout(() => setRevealPhase(3), 2000);
     }
-
-    setIsShuffling(true);
-    let cycles = 0;
-    const totalCycles = palette.length * 3; // cycle through all colors 3 times
-
-    shuffleRef.current = setInterval(() => {
-      cycles++;
-      setPaletteIndex(cycles % palette.length);
-      if (cycles >= totalCycles) {
-        if (shuffleRef.current) clearInterval(shuffleRef.current);
-        setPaletteIndex(0);
-        setIsShuffling(false);
-        // Advance to design style after shuffle settles
-        timeoutRef.current = setTimeout(() => setRevealPhase(3), 500);
-      }
-    }, 180);
-
     return () => {
-      if (shuffleRef.current) clearInterval(shuffleRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [revealPhase, animate, palette.length]);
+  }, [revealPhase, animate]);
 
-  // Phase 3 → 4 transition (design style → site structure)
+  // Phase 3 → 4: after design style items stagger in
   useEffect(() => {
     if (revealPhase === 3 && animate) {
       const itemCount = designMeta.designStyle.length;
@@ -130,6 +109,23 @@ export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, is
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [revealPhase, animate, designMeta.designStyle.length]);
+
+  // After phase 4 (site structure) finishes, call onComplete
+  useEffect(() => {
+    if (revealPhase === 4 && animate && onComplete && !completedRef.current) {
+      const itemCount = designMeta.siteStructure.length;
+      const staggerTime = itemCount * 200 + 600;
+      timeoutRef.current = setTimeout(() => {
+        if (!completedRef.current) {
+          completedRef.current = true;
+          onComplete();
+        }
+      }, staggerTime);
+    }
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [revealPhase, animate, onComplete, designMeta.siteStructure.length]);
 
   return (
     <div className="flex flex-col gap-3 w-full">
@@ -152,7 +148,7 @@ export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, is
         )}
       </AnimatePresence>
 
-      {/* Phase 2: Color Palette Carousel with shuffle */}
+      {/* Phase 2: Color Palette Carousel — smooth slide-in */}
       <AnimatePresence>
         {revealPhase >= 2 && palette.length > 0 && (
           <motion.div
@@ -166,22 +162,18 @@ export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, is
               className="relative"
               style={{ backgroundColor: currentColor?.hex || '#888' }}
               animate={{ backgroundColor: currentColor?.hex || '#888' }}
-              transition={{ duration: isShuffling ? 0.15 : 0.3 }}
+              transition={{ duration: 0.3 }}
             >
               <div className="px-4 pt-4 pb-12">
-                <motion.span
-                  key={currentColor?.hex}
-                  initial={isShuffling ? { opacity: 0, scale: 0.9 } : false}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.15 }}
+                <span
                   className="text-2xl font-bold tracking-tight"
                   style={{ color: contrastColor(currentColor?.hex || '#888') }}
                 >
                   {currentColor?.hex}
-                </motion.span>
+                </span>
               </div>
 
-              {palette.length > 1 && !isShuffling && (
+              {palette.length > 1 && (
                 <>
                   <button
                     onClick={prevColor}
@@ -198,11 +190,7 @@ export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, is
                 </>
               )}
 
-              <motion.div
-                key={currentColor?.label}
-                initial={isShuffling ? { opacity: 0 } : false}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.15 }}
+              <div
                 className={`px-4 py-2.5 text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}
                 style={{
                   backgroundColor: isDarkMode ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.85)',
@@ -210,7 +198,7 @@ export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, is
                 }}
               >
                 {currentColor?.label}
-              </motion.div>
+              </div>
             </motion.div>
 
             {/* Dots indicator */}
@@ -219,7 +207,7 @@ export const DesignBreakdown: React.FC<DesignBreakdownProps> = ({ designMeta, is
                 {palette.map((_, i) => (
                   <button
                     key={i}
-                    onClick={() => { if (!isShuffling) setPaletteIndex(i); }}
+                    onClick={() => setPaletteIndex(i)}
                     className={`w-1.5 h-1.5 rounded-full transition-all ${
                       i === paletteIndex
                         ? 'bg-blue-500 w-3'

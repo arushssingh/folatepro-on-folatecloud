@@ -68,7 +68,7 @@ app.post('/api/generate', async (req, res) => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-2.5-flash',
       contents,
       config,
     });
@@ -93,27 +93,46 @@ app.post('/api/generate/stream', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  try {
-    const stream = await ai.models.generateContentStream({
-      model: 'gemini-2.5-flash-lite',
-      contents,
-      config,
-    });
+  const MAX_RETRIES = 2;
 
-    for await (const chunk of stream) {
-      const text = chunk.text;
-      if (text) {
-        res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
+  try {
+    let success = false;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const stream = await ai.models.generateContentStream({
+          model: 'gemini-2.5-flash',
+          contents,
+          config,
+        });
+
+        for await (const chunk of stream) {
+          const text = chunk.text;
+          if (text) {
+            res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
+          }
+        }
+        success = true;
+        break;
+      } catch (retryErr) {
+        const msg = String(retryErr?.status || retryErr?.message || '');
+        const isRetryable = msg.includes('503') || msg.includes('429') || msg.includes('500');
+        if (isRetryable && attempt < MAX_RETRIES) {
+          const delay = (attempt + 1) * 2000;
+          console.warn(`Gemini ${msg} — retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw retryErr;
       }
     }
-
-    res.write('data: [DONE]\n\n');
-    res.end();
+    if (success) {
+      res.write('data: [DONE]\n\n');
+    }
   } catch (error) {
     console.error('Gemini Stream Error:', error);
     res.write(`data: ${JSON.stringify({ error: 'Failed to generate content.' })}\n\n`);
-    res.end();
   }
+  res.end();
 });
 
 // --- Local dev routes (mirror Vercel serverless functions) ---
