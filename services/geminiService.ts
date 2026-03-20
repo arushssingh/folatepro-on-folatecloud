@@ -43,6 +43,7 @@ Generate **production-ready, multi-page websites** that are beautiful and unique
   - Semantic HTML5 (<header>, <nav>, <main>, <section>, <footer>). One h1 per page. Alt text on all images.
   - Tailwind CSS via CDN (https://cdn.tailwindcss.com). Mobile-first with sm:/md:/lg: prefixes.
   - Vanilla JS only (no ES modules). All scripts before </body>.
+  - Wrap all DOM-dependent JS in DOMContentLoaded: document.addEventListener('DOMContentLoaded', () => { ... });
   - CDN libraries: Tailwind (https://cdn.tailwindcss.com), Lucide icons (https://unpkg.com/lucide@latest), 1-2 Google Fonts appropriate to the site's personality.
   - Unsplash images: https://images.unsplash.com/photo-[ID]?w=800&q=80 — only use IDs you are confident exist.
 </technical_requirements>

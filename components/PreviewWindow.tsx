@@ -343,14 +343,18 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
         html = html.replace(regex, `<style>\n/* ${cssFile} */\n${files[cssFile].content}\n</style>`);
       });
 
-      // Inject JS
+      // Inject JS — remove original <script src> tags and collect inlined scripts
+      // to inject before </body>, ensuring DOM is fully parsed before JS executes
       const jsFiles = Object.keys(files).filter(f => f.endsWith('.js') || f.endsWith('.jsx'));
+      let inlinedScripts = '';
       jsFiles.forEach(jsFile => {
         const regex = new RegExp(`<script([^>]*)src=["']\\.?\/?${escapeRegExp(jsFile)}["']([^>]*)>[\\s\\S]*?<\\/script>`, 'gi');
-        html = html.replace(regex, (match, attrs1, attrs2) => {
-          return `<script${attrs1}${attrs2}>\n// ${jsFile}\n${files[jsFile].content}\n</script>`;
-        });
+        html = html.replace(regex, '');
+        inlinedScripts += `<script>\n// ${jsFile}\n${files[jsFile].content}\n</script>\n`;
       });
+      if (inlinedScripts) {
+        html = html.replace('</body>', inlinedScripts + '</body>');
+      }
 
       // Inject Dark Mode
       if (previewDarkMode) {
@@ -365,11 +369,12 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
          html = html.replace('</head>', `<style>body { background-color: white; }</style></head>`);
       }
 
-      // Interceptor script
+      // Interceptor script — error handler stays early in <head>;
+      // click interceptor waits for DOMContentLoaded
       const injectedScripts = `
         <script>
           window.onerror = function(message, source, lineno, colno, error) {
-            const errorContainer = document.createElement('div');
+            var errorContainer = document.createElement('div');
             errorContainer.style.position = 'fixed';
             errorContainer.style.bottom = '10px';
             errorContainer.style.left = '10px';
@@ -384,20 +389,27 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
             errorContainer.style.zIndex = '9999';
             errorContainer.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
             errorContainer.innerHTML = '<strong>Runtime Error:</strong> ' + message;
-            document.body.appendChild(errorContainer);
+            if (document.body) {
+              document.body.appendChild(errorContainer);
+            } else {
+              document.addEventListener('DOMContentLoaded', function() {
+                document.body.appendChild(errorContainer);
+              });
+            }
             return false;
           };
 
-          document.addEventListener('click', (e) => {
-            const link = e.target.closest('a');
-            if (link) {
-              const href = link.getAttribute('href');
-              // Only intercept internal links (no http, no //, no tel:, no mailto:, no anchor-only)
-              if (href && !href.match(/^(https?:|\\/\\/|tel:|mailto:|#)/)) {
-                e.preventDefault();
-                window.parent.postMessage({ type: 'NAVIGATE', path: href }, '*');
+          document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('click', function(e) {
+              var link = e.target.closest('a');
+              if (link) {
+                var href = link.getAttribute('href');
+                if (href && !href.match(/^(https?:|\\/\\/|tel:|mailto:|#)/)) {
+                  e.preventDefault();
+                  window.parent.postMessage({ type: 'NAVIGATE', path: href }, '*');
+                }
               }
-            }
+            });
           });
         </script>
       `;
