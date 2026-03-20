@@ -68,7 +68,7 @@ app.post('/api/generate', async (req, res) => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       contents,
       config,
     });
@@ -95,7 +95,7 @@ app.post('/api/generate/stream', async (req, res) => {
 
   try {
     const stream = await ai.models.generateContentStream({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       contents,
       config,
     });

@@ -346,7 +346,7 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
       // Inject JS
       const jsFiles = Object.keys(files).filter(f => f.endsWith('.js') || f.endsWith('.jsx'));
       jsFiles.forEach(jsFile => {
-        const regex = new RegExp(`<script([^>]*)src=["']\\.?\/?${escapeRegExp(jsFile)}["']([^>]*)>[\s\S]*?<\/script>`, 'gi');
+        const regex = new RegExp(`<script([^>]*)src=["']\\.?\/?${escapeRegExp(jsFile)}["']([^>]*)>[\\s\\S]*?<\\/script>`, 'gi');
         html = html.replace(regex, (match, attrs1, attrs2) => {
           return `<script${attrs1}${attrs2}>\n// ${jsFile}\n${files[jsFile].content}\n</script>`;
         });
