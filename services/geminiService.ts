@@ -42,22 +42,16 @@ Your websites look like they were designed by a top agency — polished, intenti
 <multi_page_architecture>
   CRITICAL: You MUST ALWAYS generate MULTIPLE HTML pages. A single index.html is NEVER acceptable.
 
-  MINIMUM page counts (you must meet or exceed these):
-  - Simple (landing page, personal portfolio, coming soon): AT LEAST 3 HTML files + style.css + script.js
-  - Standard (restaurant, agency, SaaS, blog, startup): AT LEAST 4 HTML files + style.css + script.js
-  - Complex (e-commerce, multi-service, large portfolio, directory): AT LEAST 5-6 HTML files + style.css + script.js
+  PAGE COUNTS — stay within these limits to avoid truncation:
+  - Simple (landing page, personal portfolio, coming soon): EXACTLY 3 HTML files + style.css + script.js
+  - Standard (restaurant, agency, SaaS, blog, startup): EXACTLY 4 HTML files + style.css + script.js
+  - Complex (e-commerce, multi-service, large portfolio, directory): EXACTLY 4-5 HTML files + style.css + script.js
 
   MANDATORY files for EVERY project:
   - index.html (landing/home — this page should be EXCEPTIONAL, it's the first impression)
   - about.html (about the brand/person/company — always relevant regardless of site type)
   - contact.html (contact form, location, social links — always needed)
-  - 1+ additional pages relevant to the site type:
-    • Portfolio/Creative: portfolio.html, gallery.html
-    • Business/SaaS: services.html, pricing.html, features.html
-    • Restaurant/Cafe: menu.html, reservations.html
-    • Blog/Magazine: blog.html, articles.html
-    • E-commerce: products.html, cart.html, categories.html
-    • Agency: work.html, team.html, case-studies.html
+  - 1 additional page relevant to the site type (services.html OR pricing.html OR portfolio.html — pick ONE)
   - style.css (custom @keyframes animations, CSS variables for theming, custom properties)
   - script.js (scroll animations via IntersectionObserver, mobile menu, counters, form validation, smooth interactions)
 
@@ -611,7 +605,7 @@ function repairTruncatedJson(jsonStr: string): string {
 }
 
 function parseGeminiResult(jsonStr: string): GeminiResponse {
-  let result;
+  let result: Record<string, unknown>;
   try {
     result = JSON.parse(jsonStr);
   } catch (firstError) {
@@ -679,18 +673,19 @@ function parseGeminiResult(jsonStr: string): GeminiResponse {
       language: detectLanguage(f.name),
     };
   });
+  const r = result as any;
   const response: GeminiResponse = {
     files: fileSet,
-    explanation: result.explanation || 'Here\'s your website! Take a look at the preview.',
-    testingInstructions: result.testingInstructions || '',
+    explanation: (r.explanation as string) || 'Here\'s your website! Take a look at the preview.',
+    testingInstructions: (r.testingInstructions as string) || '',
   };
 
-  if (result.summary && result.designStyle && result.colorPalette && result.siteStructure) {
+  if (r.summary && r.designStyle && r.colorPalette && r.siteStructure) {
     response.designMeta = {
-      summary: result.summary,
-      designStyle: result.designStyle,
-      colorPalette: result.colorPalette,
-      siteStructure: result.siteStructure,
+      summary: r.summary as string,
+      designStyle: r.designStyle as string[],
+      colorPalette: r.colorPalette as { hex: string; label: string }[],
+      siteStructure: r.siteStructure as string[],
     };
   }
 
