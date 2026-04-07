@@ -40,24 +40,15 @@ Your websites look like they were designed by a top agency — polished, intenti
 </design_philosophy>
 
 <multi_page_architecture>
-  CRITICAL: You MUST ALWAYS generate MULTIPLE HTML pages. A single index.html is NEVER acceptable.
+  Generate the NUMBER OF PAGES appropriate to the complexity:
+  - Simple (landing page, personal portfolio, coming soon): 2–3 pages + style.css + script.js
+  - Standard (restaurant, agency, SaaS, blog, startup): 4–5 pages + style.css + script.js
+  - Complex (e-commerce, multi-service, large portfolio, directory): 6–8 pages + style.css + script.js
 
-  MINIMUM page counts (you must meet or exceed these):
-  - Simple (landing page, personal portfolio, coming soon): AT LEAST 3 HTML files + style.css + script.js
-  - Standard (restaurant, agency, SaaS, blog, startup): AT LEAST 4 HTML files + style.css + script.js
-  - Complex (e-commerce, multi-service, large portfolio, directory): AT LEAST 5-6 HTML files + style.css + script.js
-
-  MANDATORY files for EVERY project:
+  Always include:
   - index.html (landing/home — this page should be EXCEPTIONAL, it's the first impression)
-  - about.html (about the brand/person/company — always relevant regardless of site type)
-  - contact.html (contact form, location, social links — always needed)
-  - 1+ additional pages relevant to the site type:
-    • Portfolio/Creative: portfolio.html, gallery.html
-    • Business/SaaS: services.html, pricing.html, features.html
-    • Restaurant/Cafe: menu.html, reservations.html
-    • Blog/Magazine: blog.html, articles.html
-    • E-commerce: products.html, cart.html, categories.html
-    • Agency: work.html, team.html, case-studies.html
+  - Additional pages relevant to the site type (about.html, services.html, pricing.html,
+    contact.html, gallery.html, menu.html, team.html, blog.html, faq.html, portfolio.html)
   - style.css (custom @keyframes animations, CSS variables for theming, custom properties)
   - script.js (scroll animations via IntersectionObserver, mobile menu, counters, form validation, smooth interactions)
 
@@ -113,15 +104,10 @@ Your websites look like they were designed by a top agency — polished, intenti
   - CDN libraries:
     • Tailwind CSS: https://cdn.tailwindcss.com
     • Lucide Icons: https://unpkg.com/lucide@latest (use <i data-lucide="icon-name"></i> and call lucide.createIcons())
-      IMPORTANT: Lucide does NOT have brand/social icons. These names DO NOT EXIST: twitter, facebook, linkedin, instagram, youtube, github, tiktok, discord, slack, whatsapp.
-      For social media icons, use inline SVG instead:
-      <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="..."/></svg>
-      Valid Lucide names include: mail, phone, map-pin, arrow-right, chevron-down, menu, x, star, heart, search, user, settings, home, globe, check, plus, minus, external-link, clock, calendar, shield, zap, award, bar-chart, code, layers, layout, play, send, trending-up
     • Google Fonts: 2 complementary fonts loaded via <link> in <head>
-  - Images: use https://picsum.photos/seed/{keyword}/{width}/{height} for ALL images.
+  - Images: use https://picsum.photos/seed/{keyword}/{width}/{height} for reliable placeholder images.
     Examples: https://picsum.photos/seed/hero/1200/600, https://picsum.photos/seed/team1/400/400, https://picsum.photos/seed/product/600/400
-    Use descriptive seed keywords so images are consistent across reloads.
-    NEVER use unsplash photo IDs. NEVER use data:image/png;base64 or any base64-encoded images. NEVER use placeholder.com or placehold.it URLs.
+    Use descriptive seed keywords so images are consistent across reloads. NEVER use unsplash photo IDs.
   - Add aria-labels on interactive elements for accessibility
   - Use CSS custom properties (--primary, --accent, etc.) in style.css for easy theming
 </technical_requirements>
@@ -150,15 +136,9 @@ Your websites look like they were designed by a top agency — polished, intenti
 </content_quality>
 
 <code_quality>
-  CRITICAL: Provide the FULL, complete content of every file. NEVER truncate or use placeholders.
+  CRITICAL: Provide the FULL, complete content of every file. NEVER truncate, summarize, or use placeholders like "<!-- rest of page -->". Every file must be complete, polished, and ready to run.
 
-  OUTPUT SIZE LIMIT — THIS IS CRITICAL:
-  - Keep the TOTAL output under 50,000 characters across ALL files combined.
-  - Each HTML page should be 150-300 lines max. Be concise — don't add excessive Tailwind classes.
-  - Use a SHARED header/nav/footer across pages — keep it compact (under 30 lines).
-  - Prefer CSS classes in style.css over long inline Tailwind class strings for repeated patterns.
-  - script.js should be 80-150 lines max. Write clean, DRY code.
-  - Prioritize quality and visual impact over quantity of content. A stunning compact page beats a bloated one.
+  OUTPUT SIZE: Keep each HTML page focused and concise. Avoid repeating large blocks of identical code across pages — use consistent but efficient markup. Prioritize quality over quantity of pages. A stunning 3-page site is better than a mediocre 6-page site.
 </code_quality>
 
 <explanation_guidelines>
@@ -479,135 +459,52 @@ function detectLanguage(filename: string): string {
   return 'plaintext';
 }
 
-/** Close unclosed brackets in a JSON string */
-function closeBrackets(str: string): string {
-  const stack: string[] = [];
-  let inStr = false;
-  let esc = false;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[i];
-    if (esc) { esc = false; continue; }
-    if (ch === '\\' && inStr) { esc = true; continue; }
-    if (ch === '"') { inStr = !inStr; continue; }
-    if (!inStr) {
-      if (ch === '{' || ch === '[') stack.push(ch);
-      else if (ch === '}' || ch === ']') stack.pop();
-    }
-  }
-  let result = str;
-  while (stack.length > 0) {
-    const open = stack.pop();
-    result += open === '{' ? '}' : ']';
-  }
-  return result;
-}
-
-/** Try to parse JSON, return null on failure */
-function tryParse(str: string): Record<string, unknown> | null {
-  try {
-    const r = JSON.parse(str);
-    return (r && typeof r === 'object' && r.files) ? r : null;
-  } catch {
-    return null;
-  }
-}
-
 function repairTruncatedJson(jsonStr: string): string {
-  // Strategy 1: Find the last complete file object `}` before truncation,
-  // cut there, close the files array and root object
-  // Look for the pattern: `}` followed by `]` or `,` at the file-object level
-  // The files array looks like: "files":[{...},{...},{...}]
-  // Find last occurrence of `"}` which ends a content string + closes a file object
-  let lastFileEnd = -1;
-  let match: RegExpExecArray | null;
-  // Scan only outside strings
-  let inStr = false;
-  let esc = false;
-  let depth = 0;
-  let filesArrayStart = -1;
-  const filesIdx = jsonStr.indexOf('"files"');
+  let inString = false;
+  let escaped = false;
+  const bracketStack: string[] = [];
 
-  if (filesIdx !== -1) {
-    // Find the opening [ of the files array
-    for (let i = filesIdx; i < jsonStr.length; i++) {
-      if (jsonStr[i] === '[') { filesArrayStart = i; break; }
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
     }
-  }
 
-  if (filesArrayStart !== -1) {
-    inStr = false;
-    esc = false;
-    depth = 0;
-    for (let i = filesArrayStart + 1; i < jsonStr.length; i++) {
-      const ch = jsonStr[i];
-      if (esc) { esc = false; continue; }
-      if (ch === '\\' && inStr) { esc = true; continue; }
-      if (ch === '"') { inStr = !inStr; continue; }
-      if (!inStr) {
-        if (ch === '{' || ch === '[') depth++;
-        else if (ch === '}' || ch === ']') {
-          depth--;
-          if (depth === 0) {
-            // Just closed a top-level object in the files array
-            lastFileEnd = i + 1;
-          }
-          if (depth < 0) break; // closed the files array itself
-        }
+    if (ch === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (ch === '{' || ch === '[') {
+        bracketStack.push(ch);
+      } else if (ch === '}' || ch === ']') {
+        bracketStack.pop();
       }
     }
   }
 
-  // Strategy 1: Cut at last complete file object, add required fields, close
-  if (lastFileEnd > 0) {
-    const cut = jsonStr.slice(0, lastFileEnd);
-    const attempt = cut + '],"explanation":"Here\'s your website! Take a look at the preview.",' +
-      '"testingInstructions":"","summary":"","designStyle":[],"colorPalette":[],"siteStructure":[]}';
-    const parsed = tryParse(attempt);
-    if (parsed) return attempt;
+  let repaired = jsonStr;
+
+  // Close unterminated string
+  if (inString) {
+    repaired += '"';
   }
 
-  // Strategy 2: Aggressive — find all complete {"name":"...","content":"..."} objects
-  // by regex on the already-received text
-  const fileObjects: Array<{name: string; content: string}> = [];
-  const fileRegex = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"content"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
-  while ((match = fileRegex.exec(jsonStr)) !== null) {
-    fileObjects.push({ name: match[1], content: match[2] });
+  // Close unclosed brackets in reverse order
+  while (bracketStack.length > 0) {
+    const open = bracketStack.pop();
+    repaired += open === '{' ? '}' : ']';
   }
 
-  if (fileObjects.length > 0) {
-    const rebuilt = JSON.stringify({
-      files: fileObjects,
-      explanation: "Here's your website! Take a look at the preview.",
-      testingInstructions: '',
-      summary: '',
-      designStyle: [],
-      colorPalette: [],
-      siteStructure: [],
-    });
-    return rebuilt;
-  }
-
-  // Strategy 3: Original approach — cut at last safe position, close brackets
-  let inString = false;
-  let escaped = false;
-  let lastSafeEnd = 0;
-  for (let i = 0; i < jsonStr.length; i++) {
-    const ch = jsonStr[i];
-    if (escaped) { escaped = false; continue; }
-    if (ch === '\\' && inString) { escaped = true; continue; }
-    if (ch === '"') {
-      inString = !inString;
-      if (!inString) lastSafeEnd = i + 1;
-      continue;
-    }
-    if (!inString) {
-      if (ch === '}' || ch === ']') lastSafeEnd = i + 1;
-    }
-  }
-
-  let repaired = inString ? jsonStr.slice(0, lastSafeEnd) : jsonStr;
-  repaired = repaired.replace(/[\s,]+$/, '');
-  return closeBrackets(repaired);
+  return repaired;
 }
 
 function parseGeminiResult(jsonStr: string): GeminiResponse {
@@ -619,26 +516,10 @@ function parseGeminiResult(jsonStr: string): GeminiResponse {
     const repaired = repairTruncatedJson(jsonStr);
     try {
       result = JSON.parse(repaired);
-    } catch (secondError) {
-      console.warn('Repair also failed:', secondError);
-      // Last resort: try to extract files with regex from the raw string
-      const fileObjects: Array<{name: string; content: string}> = [];
-      const re = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"content"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(jsonStr)) !== null) {
-        fileObjects.push({ name: m[1], content: m[2] });
-      }
-      if (fileObjects.length > 0) {
-        result = {
-          files: fileObjects,
-          explanation: "Here's your website! Take a look at the preview.",
-          testingInstructions: '',
-        };
-      } else {
-        throw new Error(
-          'Failed to parse AI response. The response may have been truncated. Please try again.'
-        );
-      }
+    } catch {
+      throw new Error(
+        'Failed to parse AI response. The response may have been truncated. Please try again.'
+      );
     }
   }
 
@@ -681,8 +562,8 @@ function parseGeminiResult(jsonStr: string): GeminiResponse {
   });
   const response: GeminiResponse = {
     files: fileSet,
-    explanation: result.explanation || 'Here\'s your website! Take a look at the preview.',
-    testingInstructions: result.testingInstructions || '',
+    explanation: result.explanation,
+    testingInstructions: result.testingInstructions,
   };
 
   if (result.summary && result.designStyle && result.colorPalette && result.siteStructure) {

@@ -149,10 +149,19 @@ const App: React.FC = () => {
 
     } catch (err: any) {
       console.error("Generation Error:", err);
-      let errorMessage = `I encountered an error: ${err.message || 'Unknown error'}`;
+      const msg = err.message || 'Unknown error';
+      let errorMessage: string;
 
-      if (err.message.includes('Proxying failed') || err.message.includes('Load failed')) {
-        errorMessage = "Network Error: The request to Gemini API failed. Please ensure the API_KEY environment variable is set correctly.";
+      if (msg.includes('RATE_LIMIT')) {
+        errorMessage = "API rate limit reached. Please wait a moment and try again.";
+      } else if (msg.includes('SERVER_UNAVAILABLE')) {
+        errorMessage = "The AI service is temporarily unavailable. Please retry in a few seconds.";
+      } else if (msg.includes('Proxying failed') || msg.includes('Load failed')) {
+        errorMessage = "Network error. Please check your connection and try again.";
+      } else if (msg.includes('truncated')) {
+        errorMessage = "The response was too large and got cut off. Please try a simpler prompt.";
+      } else {
+        errorMessage = `Something went wrong. Please try again.`;
       }
 
       const errorMsg: Message = { role: 'assistant', content: errorMessage };
@@ -341,7 +350,7 @@ const App: React.FC = () => {
                 {currentFiles ? (
                   <PreviewWindow files={currentFiles} isDarkMode={isDarkMode} projectType={projectType} onFilesChange={setCurrentFiles} onDeploy={handleDeploy} currentProjectSlug={currentProjectSlug} />
                 ) : (
-                  <PreviewPlaceholder isGenerating={isGenerating} isDarkMode={isDarkMode} projectType={projectType} streamingChars={streamingChars} />
+                  <PreviewPlaceholder isGenerating={isGenerating} isDarkMode={isDarkMode} projectType={projectType} streamingChars={streamingChars} userPrompt={messages.filter(m => m.role === 'user').pop()?.content} />
                 )}
               </div>
             </motion.div>

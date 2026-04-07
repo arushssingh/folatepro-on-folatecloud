@@ -102,7 +102,7 @@ app.post('/api/generate/stream', async (req, res) => {
         const stream = await ai.models.generateContentStream({
           model: 'gemini-2.5-flash',
           contents,
-          config,
+          config: { ...config, maxOutputTokens: 65536 },
         });
 
         for await (const chunk of stream) {
@@ -130,7 +130,14 @@ app.post('/api/generate/stream', async (req, res) => {
     }
   } catch (error) {
     console.error('Gemini Stream Error:', error);
-    res.write(`data: ${JSON.stringify({ error: 'Failed to generate content.' })}\n\n`);
+    const errMsg = String(error?.status || error?.message || '');
+    if (errMsg.includes('429')) {
+      res.write(`data: ${JSON.stringify({ error: 'RATE_LIMIT' })}\n\n`);
+    } else if (errMsg.includes('503') || errMsg.includes('500')) {
+      res.write(`data: ${JSON.stringify({ error: 'SERVER_UNAVAILABLE' })}\n\n`);
+    } else {
+      res.write(`data: ${JSON.stringify({ error: 'Failed to generate content.' })}\n\n`);
+    }
   }
   res.end();
 });

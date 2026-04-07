@@ -335,7 +335,23 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
 
     if (viewMode === ViewMode.PREVIEW && iframeRef.current && fileToShow) {
       let html = fileToShow.content;
-      
+
+      // Fix malformed SVG data URIs — encode unescaped special chars
+      html = html.replace(/data:image\/svg\+xml[^"')\s]*/gi, (uri) => {
+        try {
+          // If it's already percent-encoded or base64, leave it
+          if (uri.includes(';base64,') || uri.includes('%3C')) return uri;
+          // Extract the SVG content after the comma and re-encode it
+          const commaIdx = uri.indexOf(',');
+          if (commaIdx === -1) return uri;
+          const prefix = uri.slice(0, commaIdx + 1);
+          const svgContent = uri.slice(commaIdx + 1);
+          return prefix + encodeURIComponent(decodeURIComponent(svgContent));
+        } catch {
+          return uri;
+        }
+      });
+
       // Inject CSS — replace <link> tags with inline <style>, and inject any
       // unmatched CSS files as fallback before </head>
       const cssFiles = Object.keys(files).filter(f => f.endsWith('.css'));
@@ -352,15 +368,43 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
         html = html.replace('</head>', fallbackStyles + '</head>');
       }
 
+      // Ensure Tailwind CDN is the very first script in <head> so tailwind.config works
+      const hasTailwind = /cdn\.tailwindcss\.com/i.test(html);
+      if (hasTailwind) {
+        // Remove all existing Tailwind CDN script tags (we'll re-inject one at the top of <head>)
+        html = html.replace(/<script[^>]*src=["'][^"']*cdn\.tailwindcss\.com[^"']*["'][^>]*>\s*<\/script>/gi, '');
+        // Extract any tailwind.config script blocks and re-inject them right after the CDN
+        let tailwindConfig = '';
+        html = html.replace(/<script[^>]*>([\s\S]*?tailwind\.config[\s\S]*?)<\/script>/gi, (_match, content) => {
+          // Only extract if it's purely a config block (short, no DOM listeners)
+          if (content.length < 500 && !content.includes('addEventListener') && !content.includes('querySelector')) {
+            tailwindConfig += content + '\n';
+            return '';
+          }
+          return _match;
+        });
+        const safeTwConfig = tailwindConfig.replace(/<\/script>/gi, '<\\/script>');
+        const twInject = `<script src="https://cdn.tailwindcss.com"><\/script>\n`
+          + (safeTwConfig ? `<script>${safeTwConfig}<\/script>\n` : '');
+        html = html.replace('<head>', '<head>\n' + twInject);
+      }
+
       // Inject JS — remove original <script src> tags and collect inlined scripts
       // to inject before </body>, ensuring DOM is fully parsed before JS executes
       const jsFiles = Object.keys(files).filter(f => f.endsWith('.js') || f.endsWith('.jsx'));
       let inlinedScripts = '';
       jsFiles.forEach(jsFile => {
-        const regex = new RegExp(`<script([^>]*)src=["']\\.?\/?${escapeRegExp(jsFile)}["']([^>]*)>[\\s\\S]*?<\\/script>`, 'gi');
+        // Match <script> tags referencing this file — handles spaces around =, extra attrs, defer/async
+        const regex = new RegExp(`<script[^>]*\\ssrc\\s*=\\s*["']\\.?\/?${escapeRegExp(jsFile)}["'][^>]*>[\\s\\S]*?<\\/script>`, 'gi');
         html = html.replace(regex, '');
-        inlinedScripts += `<script>\ntry {\n// ${jsFile}\n${files[jsFile].content}\n} catch(e) { console.warn('Script error in ${jsFile}:', e.message); }\n</script>\n`;
+        // Escape </script> and </style> inside JS content so the browser doesn't close the tag early
+        const safeContent = files[jsFile].content
+          .replace(/<\/script/gi, '<\\/script')
+          .replace(/<\/style/gi, '<\\/style');
+        inlinedScripts += `<script>\n// ${jsFile}\n${safeContent}\n</script>\n`;
       });
+      // Remove any remaining <script src="..."> tags pointing to local files that weren't matched
+      html = html.replace(/<script[^>]*\ssrc\s*=\s*["'](?!https?:\/\/|\/\/)[^"']*["'][^>]*>\s*<\/script>/gi, '');
       // Initialize Lucide icons after DOM loads (if CDN was included by AI)
       inlinedScripts += `<script>document.addEventListener('DOMContentLoaded',function(){if(typeof lucide!=='undefined')lucide.createIcons();});<\/script>\n`;
       if (inlinedScripts) {
@@ -369,6 +413,25 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
         } else {
           html += inlinedScripts;
         }
+      }
+
+      // JS fallback: if scroll-reveal animations fail (JS error), force-show all
+      // hidden elements after 2s by removing opacity/transform classes
+      const revealFallback = `<script>
+setTimeout(function(){
+  var els = document.querySelectorAll('.opacity-0, .translate-y-4, .translate-y-8, .translate-y-10, .translate-y-12, .-translate-y-4, .scale-95, .scale-0, .invisible');
+  for(var i=0;i<els.length;i++){
+    els[i].classList.remove('opacity-0','translate-y-4','translate-y-8','translate-y-10','translate-y-12','-translate-y-4','scale-95','scale-0','invisible');
+    els[i].style.opacity='1';
+    els[i].style.transform='none';
+    els[i].style.visibility='visible';
+  }
+}, 2000);
+<\/script>`;
+      if (html.includes('</body>')) {
+        html = html.replace('</body>', revealFallback + '</body>');
+      } else {
+        html += revealFallback;
       }
 
       // Inject Dark Mode
@@ -384,50 +447,52 @@ export const PreviewWindow: React.FC<PreviewWindowProps> = ({ files, isDarkMode,
          html = html.replace('</head>', `<style>body { background-color: white; }</style></head>`);
       }
 
-      // Interceptor script — error handler stays early in <head>;
-      // click interceptor waits for DOMContentLoaded
-      const injectedScripts = `
-        <script>
-          window.onerror = function(message, source, lineno, colno, error) {
-            var errorContainer = document.createElement('div');
-            errorContainer.style.position = 'fixed';
-            errorContainer.style.bottom = '10px';
-            errorContainer.style.left = '10px';
-            errorContainer.style.right = '10px';
-            errorContainer.style.backgroundColor = '#fee2e2';
-            errorContainer.style.color = '#991b1b';
-            errorContainer.style.padding = '12px';
-            errorContainer.style.borderRadius = '8px';
-            errorContainer.style.border = '1px solid #f87171';
-            errorContainer.style.fontFamily = 'monospace';
-            errorContainer.style.fontSize = '12px';
-            errorContainer.style.zIndex = '9999';
-            errorContainer.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-            errorContainer.innerHTML = '<strong>Runtime Error:</strong> ' + message;
-            if (document.body) {
-              document.body.appendChild(errorContainer);
-            } else {
-              document.addEventListener('DOMContentLoaded', function() {
-                document.body.appendChild(errorContainer);
-              });
-            }
-            return false;
-          };
+      // Interceptor script:
+      // 1. Suppress runtime errors (AI-generated JS often has minor issues)
+      // 2. Block ALL navigation out of iframe (window.location, window.open, etc.)
+      // 3. Intercept <a> clicks for internal multi-page navigation
+      // 4. Prevent buttons/links from navigating to external or parent URLs
+      const injectedScripts = `<script>
+window.onerror=function(){return true};
+(function(){
+  // Block window.location assignments
+  var origLocation = window.location;
+  try {
+    Object.defineProperty(window, '__blockedNav', {value: true});
+  } catch(e){}
 
-          document.addEventListener('DOMContentLoaded', function() {
-            document.addEventListener('click', function(e) {
-              var link = e.target.closest('a');
-              if (link) {
-                var href = link.getAttribute('href');
-                if (href && !href.match(/^(https?:|\\/\\/|tel:|mailto:|#)/)) {
-                  e.preventDefault();
-                  window.parent.postMessage({ type: 'NAVIGATE', path: href }, '*');
-                }
-              }
-            });
-          });
-        </script>
-      `;
+  // Block window.open
+  window.open = function(){ return null; };
+
+  // Block form submissions that navigate
+  document.addEventListener('submit', function(e){ e.preventDefault(); }, true);
+
+  document.addEventListener('DOMContentLoaded', function(){
+    // Intercept all clicks
+    document.addEventListener('click', function(e){
+      var a = e.target.closest('a');
+      if(!a) return;
+      var h = a.getAttribute('href');
+      if(!h || h === '#' || h === '' || h === 'javascript:void(0)') {
+        e.preventDefault();
+        return;
+      }
+      // External links — block, don't navigate
+      if(h.indexOf('http') === 0 || h.indexOf('//') === 0) {
+        e.preventDefault();
+        return;
+      }
+      // Tel/mailto — allow
+      if(h.indexOf('tel:') === 0 || h.indexOf('mailto:') === 0) return;
+      // Anchor links — allow scroll
+      if(h.charAt(0) === '#' && h.length > 1) return;
+      // Internal page links — send to parent for multi-page nav
+      e.preventDefault();
+      window.parent.postMessage({type:'NAVIGATE', path:h}, '*');
+    }, true);
+  });
+})();
+<\/script>`;
       html = html.replace('<head>', '<head>' + injectedScripts);
       // Inject inspector script (inactive by default, activated via postMessage)
       if (html.includes('</body>')) {

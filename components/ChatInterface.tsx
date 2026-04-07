@@ -52,19 +52,24 @@ const useTypewriter = (phrases: string[]) => {
 
 const TypewriterMessage: React.FC<{ content: string }> = ({ content }) => {
   const [displayedContent, setDisplayedContent] = useState('');
+  const safeContent = content ?? '';
 
   useEffect(() => {
+    if (!safeContent) {
+      setDisplayedContent('');
+      return;
+    }
     let index = 0;
     const interval = setInterval(() => {
-      if (index < content.length) {
-        setDisplayedContent(content.slice(0, index + 1));
+      if (index < safeContent.length) {
+        setDisplayedContent(safeContent.slice(0, index + 1));
         index++;
       } else {
         clearInterval(interval);
       }
     }, 5);
     return () => clearInterval(interval);
-  }, [content]);
+  }, [safeContent]);
 
   return <div className="whitespace-pre-wrap">{displayedContent}</div>;
 };
