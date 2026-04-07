@@ -156,6 +156,12 @@ const App: React.FC = () => {
         errorMessage = "API rate limit reached. Please wait a moment and try again.";
       } else if (msg.includes('SERVER_UNAVAILABLE')) {
         errorMessage = "The AI service is temporarily unavailable. Please retry in a few seconds.";
+      } else if (msg.includes('CONTENT_BLOCKED')) {
+        errorMessage = "Your prompt was blocked by the AI's content filter. Please rephrase and try again.";
+      } else if (msg.includes('EMPTY_RESPONSE')) {
+        errorMessage = "The AI returned an empty response. This can happen when the model is overloaded — please try again.";
+      } else if (msg.includes('Empty response')) {
+        errorMessage = "The AI returned an empty response. Please try again in a moment.";
       } else if (msg.includes('Proxying failed') || msg.includes('Load failed')) {
         errorMessage = "Network error. Please check your connection and try again.";
       } else if (msg.includes('truncated')) {

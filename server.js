@@ -105,11 +105,28 @@ app.post('/api/generate/stream', async (req, res) => {
           config: { ...config, maxOutputTokens: 65536 },
         });
 
+        let chunksSent = 0;
         for await (const chunk of stream) {
           const text = chunk.text;
           if (text) {
             res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
+            chunksSent++;
           }
+          // Detect safety/content blocks
+          const candidates = chunk.candidates;
+          if (candidates && candidates.length > 0) {
+            const finishReason = candidates[0]?.finishReason;
+            if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+              res.write(`data: ${JSON.stringify({ error: 'CONTENT_BLOCKED' })}\n\n`);
+              res.end();
+              return;
+            }
+          }
+        }
+        if (chunksSent === 0) {
+          res.write(`data: ${JSON.stringify({ error: 'EMPTY_RESPONSE' })}\n\n`);
+          res.end();
+          return;
         }
         success = true;
         break;
